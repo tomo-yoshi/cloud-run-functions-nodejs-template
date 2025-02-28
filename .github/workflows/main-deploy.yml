@@ -50,4 +50,4 @@ jobs:
           region: ${{ env.REGION }}
 
       - name: Output Production URL
-        run: echo "Production URL: ${{ steps.deploy.outputs.url }}" 
+        run: echo "Production URL ${{ steps.deploy.outputs.url }}" 
