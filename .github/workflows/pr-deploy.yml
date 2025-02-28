@@ -43,7 +43,25 @@ jobs:
 
       - name: Generate unique PR name
         id: pr-name
-        run: echo "PR_NAME=pr-${{ github.event.pull_request.number }}" >> $GITHUB_ENV
+        run: |
+          # Get repo name without owner
+          REPO_NAME=$(echo "${{ github.repository }}" | cut -d '/' -f 2)
+          
+          # Sanitize PR title: lowercase, replace spaces and special chars with dashes
+          PR_TITLE=$(echo "${{ github.event.pull_request.title }}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//')
+          
+          # Truncate PR title to keep the full name under 63 chars (Cloud Run limit)
+          # Allow ~30 chars for PR title to ensure we stay under limit
+          PR_TITLE=$(echo $PR_TITLE | cut -c 1-30)
+          
+          # Create service name: repo-name-pr-number-pr-title
+          SERVICE_NAME="${REPO_NAME}-pr-${{ github.event.pull_request.number }}-${PR_TITLE}"
+          
+          # Ensure it starts with a letter and ends with a letter/number
+          SERVICE_NAME=$(echo $SERVICE_NAME | sed 's/^[^a-z]//i' | sed 's/[^a-z0-9]$//i')
+          
+          echo "PR_NAME=${SERVICE_NAME}" >> $GITHUB_ENV
+          echo "Created service name: ${SERVICE_NAME}"
 
       - name: Set region
         run: echo "REGION=${{ secrets.CLOUD_RUN_REGION }}" >> $GITHUB_ENV
@@ -85,6 +103,7 @@ jobs:
           body: |
             ✅ PR deployed to: ${{ steps.deploy.outputs.url }}
             
+            Service name: `${{ env.PR_NAME }}`
             Last updated: ${{ github.event.pull_request.updated_at }}
           edit-mode: replace 
 
@@ -108,7 +127,25 @@ jobs:
 
       - name: Generate unique PR name
         id: pr-name
-        run: echo "PR_NAME=pr-${{ github.event.pull_request.number }}" >> $GITHUB_ENV
+        run: |
+          # Get repo name without owner
+          REPO_NAME=$(echo "${{ github.repository }}" | cut -d '/' -f 2)
+          
+          # Sanitize PR title: lowercase, replace spaces and special chars with dashes
+          PR_TITLE=$(echo "${{ github.event.pull_request.title }}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//')
+          
+          # Truncate PR title to keep the full name under 63 chars (Cloud Run limit)
+          # Allow ~30 chars for PR title to ensure we stay under limit
+          PR_TITLE=$(echo $PR_TITLE | cut -c 1-30)
+          
+          # Create service name: repo-name-pr-number-pr-title
+          SERVICE_NAME="${REPO_NAME}-pr-${{ github.event.pull_request.number }}-${PR_TITLE}"
+          
+          # Ensure it starts with a letter and ends with a letter/number
+          SERVICE_NAME=$(echo $SERVICE_NAME | sed 's/^[^a-z]//i' | sed 's/[^a-z0-9]$//i')
+          
+          echo "PR_NAME=${SERVICE_NAME}" >> $GITHUB_ENV
+          echo "Created service name: ${SERVICE_NAME}"
 
       - name: Set region
         run: echo "REGION=${{ secrets.CLOUD_RUN_REGION }}" >> $GITHUB_ENV
