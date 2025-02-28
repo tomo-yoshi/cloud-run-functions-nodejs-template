@@ -1,0 +1,54 @@
+name: Main - Deploy to Production
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy-production:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # Needed for auth with Google Cloud
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '22'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install
+
+      - name: Run tests
+        run: yarn test
+
+      - name: Build
+        run: yarn build
+
+      - name: Google Auth
+        id: auth
+        uses: google-github-actions/auth@v1
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Set region
+        run: echo "REGION=${{ secrets.CLOUD_RUN_REGION }}" >> $GITHUB_ENV
+
+      - name: Deploy to Cloud Run
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v1
+        with:
+          service: cloud-run-function-production
+          source: .
+          region: ${{ env.REGION }}
+
+      - name: Output Production URL
+        run: echo "Production URL: ${{ steps.deploy.outputs.url }}" 
