@@ -49,6 +49,8 @@ jobs:
           source: .
           region: ${{ env.REGION }}
           project_id: ${{ secrets.GCP_PROJECT_ID }}
+          env_vars: |
+            FUNCTION_TARGET=helloWorld
 
       - name: Output Production URL
         run: echo "Production URL ${{ steps.deploy.outputs.url }}" 
