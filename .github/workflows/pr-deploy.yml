@@ -10,6 +10,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+      id-token: write
 
     steps:
       - uses: actions/checkout@v3
@@ -52,6 +53,7 @@ jobs:
           service: ${{ env.PR_NAME }}
           source: .
           region: ${{ env.REGION }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
 
       - name: Comment PR with deployment URL
         uses: actions/github-script@v6
