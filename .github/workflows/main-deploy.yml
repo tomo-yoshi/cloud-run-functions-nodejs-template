@@ -49,8 +49,7 @@ jobs:
           source: .
           region: ${{ env.REGION }}
           project_id: ${{ secrets.GCP_PROJECT_ID }}
-          dockerfile: ./Dockerfile
-          allow_unauthenticated: true
+          flags: --allow-unauthenticated
 
       - name: Output Production URL
         run: echo "Production URL ${{ steps.deploy.outputs.url }}" 
