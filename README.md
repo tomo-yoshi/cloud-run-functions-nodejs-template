@@ -24,8 +24,8 @@ This is a template for Google Cloud Run functions using Node.js and TypeScript, 
 2. Install dependencies: `yarn install`
 3. Set up Google Cloud credentials
 4. Configure GitHub repository secrets:
-   - `WIF_PROVIDER`: Workload Identity Federation provider
-   - `SERVICE_ACCOUNT`: Google Cloud service account email
+   - `GCP_SA_KEY`: Google Cloud service account key (JSON)
+   - `CLOUD_RUN_REGION`: Your Cloud Run region (e.g., us-central1)
 
 ## Development Workflow
 
@@ -94,7 +94,7 @@ gcloud services enable cloudfunctions.googleapis.com
 gcloud services enable iam.googleapis.com
 ```
 
-## 3. Create a service account
+## 3. Create a service account and key
 
 ```bash
 # Create a service account for GitHub Actions
@@ -110,52 +110,19 @@ gcloud projects add-iam-policy-binding PROJECT_ID \
 --role="roles/iam.serviceAccountUser"
 gcloud projects add-iam-policy-binding PROJECT_ID \
 --member="serviceAccount:github-actions-sa@PROJECT_ID.iam.gserviceaccount.com" \
---role="roles/cloudbuild.builds.editor"
+--role="roles/storage.admin"
+
+# Create and download the service account key
+gcloud iam service-accounts keys create key.json \
+--iam-account=github-actions-sa@PROJECT_ID.iam.gserviceaccount.com
 ```
 
-## 4. Set up Workload Identity Federation for GitHub Actions
+## 4. Set up GitHub Secrets
 
-```bash
-# Create a Workload Identity Pool
-gcloud iam workload-identity-pools create "github-pool" \
---location="global" \
---display-name="GitHub Actions Pool"
+Add the following secrets to your GitHub repository:
 
-# Get the Workload Identity Pool ID
-export WORKLOAD_IDENTITY_POOL_ID=$(gcloud iam workload-identity-pools describe "github-pool" \
---location="global" \
---format="value(name)")
-
-# Create a Workload Identity Provider in the pool
-gcloud iam workload-identity-pools providers create-oidc "github-provider" \
---location="global" \
---workload-identity-pool="github-pool" \
---display-name="GitHub provider" \
---attribute-mapping="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository" \
---issuer-uri="https://token.actions.githubusercontent.com"
-
-# Get the Workload Identity Provider resource name
-export WORKLOAD_PROVIDER=$(gcloud iam workload-identity-pools providers describe "github-provider" \
---location="global" \
---workload-identity-pool="github-pool" \
---format="value(name)")
-
-# Allow authentications from the GitHub repository to impersonate the service account
-gcloud iam service-accounts add-iam-policy-binding \
-"github-actions-sa@PROJECT_ID.iam.gserviceaccount.com" \
---role="roles/iam.workloadIdentityUser" \
---member="principalSet://iam.googleapis.com/${WORKLOAD_IDENTITY_POOL_ID}/attribute.repository/GITHUB_USERNAME/REPO_NAME"
-```
-
-Replace `PROJECT_ID`, `GITHUB_USERNAME`, and `REPO_NAME` with your values.
-
-```bash
-# Get the Workload Identity Provider resource name
-echo $WORKLOAD_PROVIDER
-
-# Get the service account email
-echo "github-actions-sa@PROJECT_ID.iam.gserviceaccount.com"
-```
+1. `GCP_SA_KEY`: The entire contents of the `key.json` file
+2. `CLOUD_RUN_REGION`: Your preferred Cloud Run region (e.g., `us-central1`)
 
 ## Local Development
 
