@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "start": "yarn build && functions-framework --target=helloWorld",
+    "start": "functions-framework --target=helloWorld",
     "dev": "nodemon --exec \"yarn build && functions-framework --target=helloWorld\" --ext ts",
     "test": "jest",
     "test:watch": "jest --watch",

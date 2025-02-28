@@ -54,8 +54,8 @@ jobs:
           source: .
           region: ${{ env.REGION }}
           project_id: ${{ secrets.GCP_PROJECT_ID }}
-          env_vars: |
-            FUNCTION_TARGET=helloWorld
+          dockerfile: ./Dockerfile
+          allow_unauthenticated: true
 
       - name: Comment PR with deployment URL
         uses: actions/github-script@v6
