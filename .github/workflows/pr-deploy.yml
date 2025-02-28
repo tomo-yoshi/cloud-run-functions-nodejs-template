@@ -65,9 +65,7 @@ jobs:
           source: .
           region: ${{ env.REGION }}
           project_id: ${{ secrets.GCP_PROJECT_ID }}
-          env_vars: |
-            FUNCTION_TARGET=helloWorld
-          allow_unauthenticated: true
+          flags: --allow-unauthenticated
 
       - name: Find Comment
         uses: peter-evans/find-comment@v2
