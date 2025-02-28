@@ -3,9 +3,11 @@ name: PR - Deploy to Cloud Run
 on:
   pull_request:
     branches: [ main ]
+    types: [opened, synchronize, reopened, closed]
 
 jobs:
   deploy-pr:
+    if: github.event.action != 'closed'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -85,3 +87,54 @@ jobs:
             
             Last updated: ${{ github.event.pull_request.updated_at }}
           edit-mode: replace 
+
+  cleanup-pr:
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+
+    steps:
+      - name: Google Auth
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Generate unique PR name
+        id: pr-name
+        run: echo "PR_NAME=pr-${{ github.event.pull_request.number }}" >> $GITHUB_ENV
+
+      - name: Set region
+        run: echo "REGION=${{ secrets.CLOUD_RUN_REGION }}" >> $GITHUB_ENV
+
+      - name: Check if service exists
+        id: check-service
+        run: |
+          if gcloud run services describe ${{ env.PR_NAME }} --region=${{ env.REGION }} --project=${{ secrets.GCP_PROJECT_ID }} 2>/dev/null; then
+            echo "SERVICE_EXISTS=true" >> $GITHUB_ENV
+            echo "Service ${{ env.PR_NAME }} exists, will delete it"
+          else
+            echo "SERVICE_EXISTS=false" >> $GITHUB_ENV
+            echo "Service ${{ env.PR_NAME }} does not exist, nothing to delete"
+            exit 0  # Exit successfully but skip further steps
+          fi
+
+      - name: Delete Cloud Run service
+        if: env.SERVICE_EXISTS == 'true'
+        run: |
+          gcloud run services delete ${{ env.PR_NAME }} --region=${{ env.REGION }} --project=${{ secrets.GCP_PROJECT_ID }} --quiet
+          echo "✅ Successfully deleted Cloud Run service: ${{ env.PR_NAME }}"
+
+      - name: Add comment about cleanup
+        if: env.SERVICE_EXISTS == 'true'
+        uses: peter-evans/create-or-update-comment@v2
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            🧹 Preview environment `${{ env.PR_NAME }}` has been cleaned up. 
