@@ -60,6 +60,13 @@ jobs:
           # Ensure it starts with a letter and ends with a letter/number
           SERVICE_NAME=$(echo $SERVICE_NAME | sed 's/^[^a-z]//i' | sed 's/[^a-z0-9]$//i')
           
+          # Ensure service name is not too long (max 63 chars for Cloud Run)
+          if [ ${#SERVICE_NAME} -gt 63 ]; then
+            SERVICE_NAME=$(echo $SERVICE_NAME | cut -c 1-63)
+            # Ensure it still ends with a letter/number
+            SERVICE_NAME=$(echo $SERVICE_NAME | sed 's/[^a-z0-9]$//i')
+          fi
+          
           echo "PR_NAME=${SERVICE_NAME}" >> $GITHUB_ENV
           echo "Created service name: ${SERVICE_NAME}"
 
@@ -143,6 +150,13 @@ jobs:
           
           # Ensure it starts with a letter and ends with a letter/number
           SERVICE_NAME=$(echo $SERVICE_NAME | sed 's/^[^a-z]//i' | sed 's/[^a-z0-9]$//i')
+          
+          # Ensure service name is not too long (max 63 chars for Cloud Run)
+          if [ ${#SERVICE_NAME} -gt 63 ]; then
+            SERVICE_NAME=$(echo $SERVICE_NAME | cut -c 1-63)
+            # Ensure it still ends with a letter/number
+            SERVICE_NAME=$(echo $SERVICE_NAME | sed 's/[^a-z0-9]$//i')
+          fi
           
           echo "PR_NAME=${SERVICE_NAME}" >> $GITHUB_ENV
           echo "Created service name: ${SERVICE_NAME}"
