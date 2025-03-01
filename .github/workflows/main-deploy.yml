@@ -60,7 +60,7 @@ jobs:
           source: .
           region: ${{ env.REGION }}
           project_id: ${{ secrets.GCP_PROJECT_ID }}
-          flags: --allow-unauthenticated --no-create-if-missing=${{ env.SERVICE_EXISTS == 'true' }}
+          flags: --allow-unauthenticated
 
       - name: Output Production URL
         run: echo "Production URL ${{ steps.deploy.outputs.url }}" 
