@@ -26,6 +26,7 @@ This is a template for Google Cloud Run functions using Node.js and TypeScript, 
 4. Configure GitHub repository secrets:
    - `GCP_SA_KEY`: Google Cloud service account key (JSON)
    - `CLOUD_RUN_REGION`: Your Cloud Run region (e.g., us-central1)
+   - `GCP_PROJECT_ID`: Google Cloud project ID (string)
 
 ## Development Workflow
 
