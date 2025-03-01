@@ -1,9 +1,9 @@
-import { Request, Response } from 'express';
+import { Request as ExpressRequest, Response as ExpressResponse } from 'express';
 import { helloWorld } from '../src/function';
 
 describe('helloWorld function', () => {
-  let req: Partial<Request>;
-  let res: Partial<Response>;
+  let req: Partial<ExpressRequest>;
+  let res: Partial<ExpressResponse>;
 
   beforeEach(() => {
     req = {
@@ -16,14 +16,14 @@ describe('helloWorld function', () => {
   });
 
   it('should return Hello World! when no name is provided', () => {
-    helloWorld(req as Request, res as Response);
+    helloWorld(req as any, res as any);
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.send).toHaveBeenCalledWith('Hello World!');
   });
 
   it('should return Hello [name]! when name is provided', () => {
     req.query = { name: 'Test' };
-    helloWorld(req as Request, res as Response);
+    helloWorld(req as any, res as any);
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.send).toHaveBeenCalledWith('Hello Test!');
   });

@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write # Needed for auth with Google Cloud
+      id-token: write
 
     steps:
       - uses: actions/checkout@v3
@@ -31,24 +31,36 @@ jobs:
 
       - name: Google Auth
         id: auth
-        uses: google-github-actions/auth@v1
+        uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
-          service_account: ${{ secrets.SERVICE_ACCOUNT }}
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
 
       - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v1
+        uses: google-github-actions/setup-gcloud@v2
 
       - name: Set region
         run: echo "REGION=${{ secrets.CLOUD_RUN_REGION }}" >> $GITHUB_ENV
+      
+      - name: Check if service exists
+        id: check-service
+        run: |
+          if gcloud run services describe cloud-run-function-production --region=${{ env.REGION }} --project=${{ secrets.GCP_PROJECT_ID }} &> /dev/null; then
+            echo "SERVICE_EXISTS=true" >> $GITHUB_ENV
+            echo "Service exists, will update existing service"
+          else
+            echo "SERVICE_EXISTS=false" >> $GITHUB_ENV
+            echo "Service does not exist, will create new service"
+          fi
 
       - name: Deploy to Cloud Run
         id: deploy
-        uses: google-github-actions/deploy-cloudrun@v1
+        uses: google-github-actions/deploy-cloudrun@v2
         with:
           service: cloud-run-function-production
           source: .
           region: ${{ env.REGION }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          flags: --allow-unauthenticated --no-create-if-missing=${{ env.SERVICE_EXISTS == 'true' }}
 
       - name: Output Production URL
-        run: echo "Production URL: ${{ steps.deploy.outputs.url }}" 
+        run: echo "Production URL ${{ steps.deploy.outputs.url }}" 

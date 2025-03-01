@@ -3,14 +3,16 @@ name: PR - Deploy to Cloud Run
 on:
   pull_request:
     branches: [ main ]
+    types: [opened, synchronize, reopened, closed]
 
 jobs:
   deploy-pr:
+    if: github.event.action != 'closed'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
-      id-token: write # Needed for auth with Google Cloud
+      id-token: write
 
     steps:
       - uses: actions/checkout@v3
@@ -32,37 +34,158 @@ jobs:
 
       - name: Google Auth
         id: auth
-        uses: google-github-actions/auth@v1
+        uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
-          service_account: ${{ secrets.SERVICE_ACCOUNT }}
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
 
       - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v1
+        uses: google-github-actions/setup-gcloud@v2
 
       - name: Generate unique PR name
         id: pr-name
-        run: echo "PR_NAME=pr-${{ github.event.pull_request.number }}-${{ github.sha }}" >> $GITHUB_ENV
+        run: |
+          # Get repo name without owner
+          REPO_NAME=$(echo "${{ github.repository }}" | cut -d '/' -f 2)
+          
+          # Sanitize PR title: lowercase, replace spaces and special chars with dashes
+          PR_TITLE=$(echo "${{ github.event.pull_request.title }}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//')
+          
+          # Truncate PR title to keep the full name under 63 chars (Cloud Run limit)
+          # Allow ~30 chars for PR title to ensure we stay under limit
+          PR_TITLE=$(echo $PR_TITLE | cut -c 1-30)
+          
+          # Create service name: repo-name-pr-number-pr-title
+          SERVICE_NAME="${REPO_NAME}-pr-${{ github.event.pull_request.number }}-${PR_TITLE}"
+          
+          # Ensure it starts with a letter and ends with a letter/number
+          SERVICE_NAME=$(echo $SERVICE_NAME | sed 's/^[^a-z]//i' | sed 's/[^a-z0-9]$//i')
+          
+          # Ensure service name is not too long (max 63 chars for Cloud Run)
+          if [ ${#SERVICE_NAME} -gt 63 ]; then
+            SERVICE_NAME=$(echo $SERVICE_NAME | cut -c 1-63)
+            # Ensure it still ends with a letter/number
+            SERVICE_NAME=$(echo $SERVICE_NAME | sed 's/[^a-z0-9]$//i')
+          fi
+          
+          echo "PR_NAME=${SERVICE_NAME}" >> $GITHUB_ENV
+          echo "Created service name: ${SERVICE_NAME}"
 
       - name: Set region
         run: echo "REGION=${{ secrets.CLOUD_RUN_REGION }}" >> $GITHUB_ENV
 
+      - name: Check if service exists
+        id: check-service
+        run: |
+          if gcloud run services describe ${{ env.PR_NAME }} --region=${{ env.REGION }} --project=${{ secrets.GCP_PROJECT_ID }} 2>/dev/null; then
+            echo "SERVICE_EXISTS=true" >> $GITHUB_ENV
+            echo "Service ${{ env.PR_NAME }} exists, will update it"
+          else
+            echo "SERVICE_EXISTS=false" >> $GITHUB_ENV
+            echo "Service ${{ env.PR_NAME }} does not exist, will create it"
+          fi
+
       - name: Deploy to Cloud Run
         id: deploy
-        uses: google-github-actions/deploy-cloudrun@v1
+        uses: google-github-actions/deploy-cloudrun@v2
         with:
           service: ${{ env.PR_NAME }}
           source: .
           region: ${{ env.REGION }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          flags: --allow-unauthenticated
 
-      - name: Comment PR with deployment URL
-        uses: actions/github-script@v6
+      - name: Find Comment
+        uses: peter-evans/find-comment@v2
+        id: find-comment
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `✅ PR deployed to: ${{ steps.deploy.outputs.url }}`
-            }) 
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: 'github-actions[bot]'
+          body-includes: 'PR deployed to:'
+
+      - name: Create or update comment
+        uses: peter-evans/create-or-update-comment@v2
+        with:
+          comment-id: ${{ steps.find-comment.outputs.comment-id }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            ✅ PR deployed to: ${{ steps.deploy.outputs.url }}
+            
+            Service name: `${{ env.PR_NAME }}`
+            Last updated: ${{ github.event.pull_request.updated_at }}
+          edit-mode: replace 
+
+  cleanup-pr:
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+
+    steps:
+      - name: Google Auth
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Generate unique PR name
+        id: pr-name
+        run: |
+          # Get repo name without owner
+          REPO_NAME=$(echo "${{ github.repository }}" | cut -d '/' -f 2)
+          
+          # Sanitize PR title: lowercase, replace spaces and special chars with dashes
+          PR_TITLE=$(echo "${{ github.event.pull_request.title }}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//')
+          
+          # Truncate PR title to keep the full name under 63 chars (Cloud Run limit)
+          # Allow ~30 chars for PR title to ensure we stay under limit
+          PR_TITLE=$(echo $PR_TITLE | cut -c 1-30)
+          
+          # Create service name: repo-name-pr-number-pr-title
+          SERVICE_NAME="${REPO_NAME}-pr-${{ github.event.pull_request.number }}-${PR_TITLE}"
+          
+          # Ensure it starts with a letter and ends with a letter/number
+          SERVICE_NAME=$(echo $SERVICE_NAME | sed 's/^[^a-z]//i' | sed 's/[^a-z0-9]$//i')
+          
+          # Ensure service name is not too long (max 63 chars for Cloud Run)
+          if [ ${#SERVICE_NAME} -gt 63 ]; then
+            SERVICE_NAME=$(echo $SERVICE_NAME | cut -c 1-63)
+            # Ensure it still ends with a letter/number
+            SERVICE_NAME=$(echo $SERVICE_NAME | sed 's/[^a-z0-9]$//i')
+          fi
+          
+          echo "PR_NAME=${SERVICE_NAME}" >> $GITHUB_ENV
+          echo "Created service name: ${SERVICE_NAME}"
+
+      - name: Set region
+        run: echo "REGION=${{ secrets.CLOUD_RUN_REGION }}" >> $GITHUB_ENV
+
+      - name: Check if service exists
+        id: check-service
+        run: |
+          if gcloud run services describe ${{ env.PR_NAME }} --region=${{ env.REGION }} --project=${{ secrets.GCP_PROJECT_ID }} 2>/dev/null; then
+            echo "SERVICE_EXISTS=true" >> $GITHUB_ENV
+            echo "Service ${{ env.PR_NAME }} exists, will delete it"
+          else
+            echo "SERVICE_EXISTS=false" >> $GITHUB_ENV
+            echo "Service ${{ env.PR_NAME }} does not exist, nothing to delete"
+            exit 0  # Exit successfully but skip further steps
+          fi
+
+      - name: Delete Cloud Run service
+        if: env.SERVICE_EXISTS == 'true'
+        run: |
+          gcloud run services delete ${{ env.PR_NAME }} --region=${{ env.REGION }} --project=${{ secrets.GCP_PROJECT_ID }} --quiet
+          echo "✅ Successfully deleted Cloud Run service: ${{ env.PR_NAME }}"
+
+      - name: Add comment about cleanup
+        if: env.SERVICE_EXISTS == 'true'
+        uses: peter-evans/create-or-update-comment@v2
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            🧹 Preview environment `${{ env.PR_NAME }}` has been cleaned up. 
