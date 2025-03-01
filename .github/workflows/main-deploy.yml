@@ -44,7 +44,7 @@ jobs:
       - name: Check if service exists
         id: check-service
         run: |
-          if gcloud run services describe cloud-run-function-production --region=${{ env.REGION }} --project=${{ secrets.GCP_PROJECT_ID }} &> /dev/null; then
+          if gcloud run services describe ${{ github.event.repository.name }}-production --region=${{ env.REGION }} --project=${{ secrets.GCP_PROJECT_ID }} &> /dev/null; then
             echo "SERVICE_EXISTS=true" >> $GITHUB_ENV
             echo "Service exists, will update existing service"
           else
@@ -56,7 +56,7 @@ jobs:
         id: deploy
         uses: google-github-actions/deploy-cloudrun@v2
         with:
-          service: cloud-run-function-production
+          service: ${{ github.event.repository.name }}-production
           source: .
           region: ${{ env.REGION }}
           project_id: ${{ secrets.GCP_PROJECT_ID }}
